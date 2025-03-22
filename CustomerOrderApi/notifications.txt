@@ -1,3 +1,0 @@
-22.03.2025 16:57:25: Product added: Test Product, ID: 21, Price: 99,99
-22.03.2025 16:59:49: Product added: Deneme ürünü, ID: 22, Price: 199,99
-22.03.2025 17:00:23: Product added: Deneme ürünü, ID: 23, Price: 199,99
