@@ -22,6 +22,14 @@
 		</PackageReference>
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.4" />
 		<PackageReference Include="RabbitMQ.Client" Version="6.2.1" />
+		<PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+		<PackageReference Include="Serilog.Enrichers.Context" Version="4.6.5" />
+		<PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+		<PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+		<PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+		<PackageReference Include="Serilog.Sinks.PostgreSQL" Version="2.3.0" />
+		<PackageReference Include="Serilog.Sinks.RollingFile" Version="3.3.0" />
 		<PackageReference Include="StackExchange.Redis" Version="2.8.31" />
 		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
 		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.0.1" />
@@ -31,7 +39,7 @@
 		<ProjectReference Include="..\CustomerOrders.Infrastructure\CustomerOrders.Infrastructure.csproj" />
 		<ProjectReference Include="..\CustomerOrders.Core\CustomerOrders.Core.csproj" />
 		<ProjectReference Include="..\CustomerOrders.Application\CustomerOrders.Application.csproj" />
-		<ProjectReference Include="..\CustomerOrders.Infrastructure\CustomerOrders.Infrastructure.csproj" />
+		
 	</ItemGroup>
 
 </Project>

@@ -1,28 +1,59 @@
-﻿using CustomerOrders.Application.Interfaces;
+﻿using CustomerOrders.Application.Helpers.Validators.Primitives;
+using CustomerOrders.Application.Helpers.Validators.Requests;
+using CustomerOrders.Application.Interfaces;
+using CustomerOrders.Application.Middleware;
 using CustomerOrders.Application.Services;
+using CustomerOrders.Application.Services.ConsumerService;
+using CustomerOrders.Application.Services.RabbitMQ;
+using CustomerOrders.Core.Interfaces;
 using CustomerOrders.Infrastructure.Data;
 using CustomerOrders.Infrastructure.Repositories;
 using CustomerOrders.Infrastructure.Seed;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Serilog;
+using Serilog.Events;
 using StackExchange.Redis;
-using CustomerOrders.Application.Services.RabbitMQ;
-using CustomerOrders.Application.Services.ConsumerService;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Retrieve secrets from User Secrets (DB connection and JWT settings)
+// Serilog structuring
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.File(
+        path: "Logs/info-.log",
+        restrictedToMinimumLevel: LogEventLevel.Information,
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 5_000_000,
+        rollOnFileSizeLimit: true,
+        retainedFileCountLimit: 10
+    )
+    .WriteTo.File(
+        path: "Logs/error-.log",
+        restrictedToMinimumLevel: LogEventLevel.Error,
+        rollingInterval: RollingInterval.Day,
+        fileSizeLimitBytes: 5_000_000,
+        rollOnFileSizeLimit: true,
+        retainedFileCountLimit: 10
+    )
+    .CreateLogger();
+
+builder.Host.UseSerilog();
+
+// Retrieve secrets
 var connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var jwtKey = Convert.FromBase64String(jwtSettings["Key"]!);
 
-// Configure PostgreSQL connection using User Secrets.
+// Configure PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-// Configure JWT Authentication.
+// JWT Authentication
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -45,30 +76,39 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Register application dependencies.
+// Dependency Injections
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<CustomerOrderService>();
 builder.Services.AddScoped<IUserService, UserService>();
-
-// Add Redis Cache Service
 builder.Services.AddScoped<RedisCacheService>();
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect(builder.Configuration.GetValue<string>("Redis:ConnectionString"))
 );
 
-// Add RabbitMQ Service
 builder.Services.AddSingleton<RabbitMqService>();
-
-// Add RabbitMQ Consumer Service
 builder.Services.AddSingleton<ConsumerService>(sp =>
 {
     var rabbitMqService = sp.GetRequiredService<RabbitMqService>();
-    return new ConsumerService(rabbitMqService);
+    var logger = sp.GetRequiredService<ILogger<ConsumerService>>();
+    return new ConsumerService(rabbitMqService, logger);
 });
 
-// Configure Swagger with JWT support.
+// FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<AddOrderProductItemRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ProductItemsValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<IdValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<QuantityValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<EmailValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<UsernameValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
+
+// Swagger configuration
 builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -92,28 +132,25 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Add controllers and API explorer.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-// Build the web application.
 var app = builder.Build();
 
-// Create and start the ConsumerService to listen to RabbitMQ messages.
+// Start RabbitMQ Consumer
 var consumerService = app.Services.GetRequiredService<ConsumerService>();
 consumerService.StartConsuming();
 
-// Enable Swagger UI.
+// Middleware pipeline
 app.UseSwagger();
 app.UseSwaggerUI();
-
-// Configure middleware pipeline.
 app.UseHttpsRedirection();
 app.UseAuthentication();
+app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 
-// Seed the database on startup.
+// Run DB seed
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;

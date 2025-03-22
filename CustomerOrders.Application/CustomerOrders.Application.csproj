@@ -1,23 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\CustomerOrders.Core\CustomerOrders.Core.csproj" />
-  </ItemGroup>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="11.11.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.1" />
-	  <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
-	  <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-	  <PackageReference Include="RabbitMQ.Client" Version="6.2.1" />
+	<ItemGroup>
+		<ProjectReference Include="..\CustomerOrders.Core\CustomerOrders.Core.csproj" />
+		<ProjectReference Include="..\CustomerOrders.Infrastructure\CustomerOrders.Infrastructure.csproj" />
+	</ItemGroup>
 
-	  <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="FluentValidation" Version="11.11.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.1" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+		<PackageReference Include="RabbitMQ.Client" Version="6.2.1" />
+		<PackageReference Include="StackExchange.Redis" Version="2.8.31" />
+	</ItemGroup>
 
 </Project>
