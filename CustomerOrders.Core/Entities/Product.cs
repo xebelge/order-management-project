@@ -1,5 +1,8 @@
 ﻿namespace CustomerOrders.Core.Entities
 {
+    /// <summary>
+    /// Holds product related informations.
+    /// </summary>
     public class Product : BaseEntity
     {
         public string Barcode { get; set; } = string.Empty;

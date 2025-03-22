@@ -47,11 +47,5 @@ namespace CustomerOrders.Application.Services.RabbitMQ
                                   basicProperties: null,
                                   body: body);
         }
-
-        public void Close()
-        {
-            _channel?.Close();
-            _connection?.Close();
-        }
     }
 }

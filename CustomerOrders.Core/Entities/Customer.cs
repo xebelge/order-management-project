@@ -2,6 +2,9 @@
 
 namespace CustomerOrders.Core.Entities
 {
+    /// <summary>
+    /// Represents an user with personal info, address, and order history.
+    /// </summary>
     public class Customer: BaseEntity
     {
         public int Id { get; set; }
@@ -21,5 +24,6 @@ namespace CustomerOrders.Core.Entities
         public required string Address { get; set; }
 
         public ICollection<CustomerOrder> Orders { get; set; } = new List<CustomerOrder>();
+        public bool IsDeleted { get; set; } = false;
     }
 }

@@ -2,6 +2,9 @@
 
 namespace CustomerOrders.Application.Interfaces
 {
+    /// <summary>
+    /// Manages user authentication, registration, and profile updates.
+    /// </summary>
     public interface IUserService
     {
         Task<Customer?> GetUserByUsernameAsync(string username);

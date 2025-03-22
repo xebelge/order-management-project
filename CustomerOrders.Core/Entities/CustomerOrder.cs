@@ -1,5 +1,8 @@
 ﻿namespace CustomerOrders.Core.Entities
 {
+    /// <summary>
+    /// Represents an order placed by a customer, containing product details and address info.
+    /// </summary>
     public class CustomerOrder : BaseEntity
     {
         public int CustomerId { get; set; }

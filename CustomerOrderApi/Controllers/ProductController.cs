@@ -1,14 +1,14 @@
 ﻿using CustomerOrders.Application.DTOs;
-using CustomerOrders.Application.Helpers;
 using CustomerOrders.Application.Services;
 using CustomerOrders.Core.Entities;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CustomerOrderApi.Controllers
 {
     /// <summary>
-    /// Provides operations for managing products.
+    /// Manages product-related operations like retrieval, creation, update, and deletion.
     /// </summary>
     [Authorize]
     [ApiController]
@@ -16,20 +16,22 @@ namespace CustomerOrderApi.Controllers
     public class ProductController : ControllerBase
     {
         private readonly ProductService _productService;
+        private readonly IValidator<Product> _productValidator;
+        private readonly IValidator<int> _productIdValidator;
 
-        /// <summary>
-        /// Initializes a new instance of the ProductController class.
-        /// </summary>
-        /// <param name="productService">The service that provides product-related operations.</param>
-        public ProductController(ProductService productService)
+        public ProductController(
+            ProductService productService,
+            IValidator<Product> productValidator,
+            IValidator<int> productIdValidator)
         {
             _productService = productService;
+            _productValidator = productValidator;
+            _productIdValidator = productIdValidator;
         }
 
         /// <summary>
-        /// Retrieves all products.
+        /// Gets a list of all products in the system.
         /// </summary>
-        /// <returns>A list of all products.</returns>
         [HttpGet]
         public async Task<IActionResult> GetProducts()
         {
@@ -38,17 +40,17 @@ namespace CustomerOrderApi.Controllers
         }
 
         /// <summary>
-        /// Retrieves a product by its unique ID.
+        /// Fetches a product by its unique ID.
         /// </summary>
-        /// <param name="id">The unique ID of the product.</param>
-        /// <returns>The product with the specified ID, or a NotFound result if it doesn't exist.</returns>
+        /// <param name="id">Product ID to look up.</param>
+        /// <returns>Product details or an error if not found.</returns>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProductById(int id)
         {
-            var validationError = ValidationHelper.ValidateProductId(id);
-            if (!string.IsNullOrEmpty(validationError))
+            var validationResult = await _productIdValidator.ValidateAsync(id);
+            if (!validationResult.IsValid)
             {
-                return BadRequest(new ApiResponseDto<string>(400, false, validationError));
+                return BadRequest(new ApiResponseDto<string>(400, false, validationResult.Errors[0].ErrorMessage));
             }
 
             var product = await _productService.GetProductByIdAsync(id);
@@ -61,22 +63,30 @@ namespace CustomerOrderApi.Controllers
         }
 
         /// <summary>
-        /// Adds a new product to the inventory.
+        /// Adds one or more new products to inventory.
         /// </summary>
-        /// <param name="products">The products to add.</param>
-        /// <returns>The created product.</returns>
+        /// <param name="requestList">Product creation details.</param>
+        /// <returns>200 OK if added, or a validation error.</returns>
         [HttpPost]
-        public async Task<IActionResult> AddProducts([FromBody] List<Product> products)
+        public async Task<IActionResult> AddProducts([FromBody] List<CreateProductRequest> requestList)
         {
-            foreach (var product in products)
+            foreach (var request in requestList)
             {
-                var validationError = ValidationHelper.ValidateProduct(product);
-                if (!string.IsNullOrEmpty(validationError))
+                var product = new Product
                 {
-                    return BadRequest(new ApiResponseDto<string>(400, false, validationError));
+                    Barcode = request.Barcode,
+                    Description = request.Description,
+                    Price = request.Price,
+                    Quantity = request.Quantity,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                var validationResult = await _productValidator.ValidateAsync(product);
+                if (!validationResult.IsValid)
+                {
+                    return BadRequest(new ApiResponseDto<string>(400, false, validationResult.Errors[0].ErrorMessage));
                 }
 
-                product.CreatedAt = DateTime.UtcNow;
                 await _productService.AddProductAsync(product);
             }
 
@@ -84,22 +94,35 @@ namespace CustomerOrderApi.Controllers
         }
 
         /// <summary>
-        /// Updates an existing product.
+        /// Updates existing products based on their IDs.
         /// </summary>
-        /// <param name="products">The updated product data.</param>
-        /// <returns>No content if successful; BadRequest if the validation fails.</returns>
+        /// <param name="requestList">List of product update data.</param>
+        /// <returns>200 OK if updated, or a validation error.</returns>
         [HttpPut]
-        public async Task<IActionResult> UpdateProducts([FromBody] List<Product> products)
+        public async Task<IActionResult> UpdateProducts([FromBody] List<UpdateProductRequest> requestList)
         {
-            foreach (var product in products)
+            foreach (var request in requestList)
             {
-                var validationError = ValidationHelper.ValidateProduct(product);
-                if (!string.IsNullOrEmpty(validationError))
+                var validationIdResult = await _productIdValidator.ValidateAsync(request.Id);
+                if (!validationIdResult.IsValid)
+                    return BadRequest(new ApiResponseDto<string>(400, false, validationIdResult.Errors[0].ErrorMessage));
+
+                var product = new Product
                 {
-                    return BadRequest(new ApiResponseDto<string>(400, false, validationError));
+                    Id = request.Id,
+                    Barcode = request.Barcode,
+                    Description = request.Description,
+                    Price = request.Price,
+                    Quantity = request.Quantity,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                var validationResult = await _productValidator.ValidateAsync(product);
+                if (!validationResult.IsValid)
+                {
+                    return BadRequest(new ApiResponseDto<string>(400, false, validationResult.Errors[0].ErrorMessage));
                 }
 
-                product.UpdatedAt = DateTime.UtcNow;
                 await _productService.UpdateProductAsync(product);
             }
 
@@ -109,15 +132,15 @@ namespace CustomerOrderApi.Controllers
         /// <summary>
         /// Deletes a product by its unique ID.
         /// </summary>
-        /// <param name="id">The ID of the product to delete.</param>
-        /// <returns>No content if successful.</returns>
+        /// <param name="id">The product ID to remove.</param>
+        /// <returns>NoContent or a validation error.</returns>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var validationError = ValidationHelper.ValidateProductId(id);
-            if (!string.IsNullOrEmpty(validationError))
+            var validationResult = await _productIdValidator.ValidateAsync(id);
+            if (!validationResult.IsValid)
             {
-                return BadRequest(new ApiResponseDto<string>(400, false, validationError));
+                return BadRequest(new ApiResponseDto<string>(400, false, validationResult.Errors[0].ErrorMessage));
             }
 
             await _productService.DeleteProductAsync(id);
