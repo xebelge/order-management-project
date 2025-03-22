@@ -1,4 +1,5 @@
 ﻿using CustomerOrders.Application.Interfaces;
+using CustomerOrders.Application.Services.RabbitMQ;
 using CustomerOrders.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,10 +8,12 @@ namespace CustomerOrders.Application.Services
     public class CustomerService
     {
         private readonly IRepository<Customer> _repository;
+        private readonly RabbitMqService _rabbitMqService;
 
-        public CustomerService(IRepository<Customer> repository)
+        public CustomerService(IRepository<Customer> repository, RabbitMqService rabbitMqService)
         {
             _repository = repository;
+            _rabbitMqService = rabbitMqService;
         }
 
         public async Task<IEnumerable<CustomerDto>> GetAllCustomersAsync()
@@ -78,7 +81,9 @@ namespace CustomerOrders.Application.Services
             customer.Email = customerDto.Email;
 
             await _repository.UpdateAsync(customer);
-        }
 
+            var notificationMessage = $"Customer updated: {customer.Name}, ID: {customer.Id}, Email: {customer.Email}";
+            _rabbitMqService.SendMessage(notificationMessage);
+        }
     }
 }
