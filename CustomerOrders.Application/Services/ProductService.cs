@@ -2,6 +2,7 @@
 using CustomerOrders.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using CustomerOrders.Application.Services.RabbitMQ;
 
 namespace CustomerOrders.Application.Services
 {
@@ -10,12 +11,14 @@ namespace CustomerOrders.Application.Services
         private readonly IRepository<Product> _repository;
         private readonly RedisCacheService _redisCacheService;
         private readonly ILogger<ProductService> _logger;
+        private readonly RabbitMqService _rabbitMqService;
 
-        public ProductService(IRepository<Product> repository, RedisCacheService redisCacheService, ILogger<ProductService> logger)
+        public ProductService(IRepository<Product> repository, RedisCacheService redisCacheService, ILogger<ProductService> logger, RabbitMqService rabbitMqService)
         {
             _repository = repository;
             _redisCacheService = redisCacheService;
             _logger = logger;
+            _rabbitMqService = rabbitMqService;
         }
 
         public async Task<IEnumerable<ProductDto>> GetAllProductsAsync()
@@ -84,6 +87,9 @@ namespace CustomerOrders.Application.Services
 
             _logger.LogInformation("Caching updated product list after adding new product.");
             await _redisCacheService.CacheProductListAsync(products);
+
+            var notificationMessage = $"Product added: {product.Description}, ID: {product.Id}, Price: {product.Price}";
+            _rabbitMqService.SendMessage(notificationMessage);
         }
 
         public async Task UpdateProductAsync(Product product)
@@ -96,6 +102,9 @@ namespace CustomerOrders.Application.Services
 
             _logger.LogInformation("Caching updated product list after updating product.");
             await _redisCacheService.CacheProductListAsync(products);
+
+            var notificationMessage = $"Product updated: {product.Description}, ID: {product.Id}, Price: {product.Price}";
+            _rabbitMqService.SendMessage(notificationMessage);
         }
 
         public async Task DeleteProductAsync(int id)
@@ -112,6 +121,9 @@ namespace CustomerOrders.Application.Services
 
                 _logger.LogInformation("Caching updated product list after deletion.");
                 await _redisCacheService.CacheProductListAsync(products);
+
+                var notificationMessage = $"Product deleted: {product.Description}, ID: {product.Id}";
+                _rabbitMqService.SendMessage(notificationMessage);
             }
             else
             {

@@ -1,4 +1,5 @@
 ﻿using CustomerOrders.Application.Interfaces;
+using CustomerOrders.Application.Services.RabbitMQ;
 using CustomerOrders.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,11 +9,13 @@ namespace CustomerOrders.Application.Services
     {
         private readonly IRepository<CustomerOrder> _repository;
         private readonly IRepository<Product> _productRepository;
+        private readonly RabbitMqService _rabbitMqService;
 
-        public CustomerOrderService(IRepository<CustomerOrder> repository, IRepository<Product> productRepository)
+        public CustomerOrderService(IRepository<CustomerOrder> repository, IRepository<Product> productRepository, RabbitMqService rabbitMqService)
         {
             _repository = repository;
             _productRepository = productRepository;
+            _rabbitMqService = rabbitMqService;
         }
 
         public async Task<IEnumerable<CustomerOrderDto>> GetAllOrdersAsync()
@@ -74,6 +77,7 @@ namespace CustomerOrders.Application.Services
                 .ThenInclude(cop => cop.Product)
                 .FirstOrDefaultAsync(o => o.Id == id);
         }
+
         public async Task AddOrderAsync(CustomerOrder order)
         {
             foreach (var cop in order.CustomerOrderProducts)
@@ -92,6 +96,9 @@ namespace CustomerOrders.Application.Services
             }
 
             await _repository.AddAsync(order);
+
+            var notificationMessage = $"Order added: CustomerId: {order.CustomerId}, OrderId: {order.Id}, TotalAmount: {order.CustomerOrderProducts.Sum(cop => cop.Product.Price * cop.ProductQuantity)}";
+            _rabbitMqService.SendMessage(notificationMessage);
         }
 
         public async Task DeleteOrderAsync(int id)
@@ -100,18 +107,23 @@ namespace CustomerOrders.Application.Services
             if (order != null)
             {
                 await _repository.DeleteAsync(order);
+
+                var notificationMessage = $"Order deleted: OrderId: {order.Id}, CustomerId: {order.CustomerId}";
+                _rabbitMqService.SendMessage(notificationMessage);
             }
         }
 
         public async Task UpdateOrderAsync(CustomerOrder order)
         {
             await _repository.UpdateAsync(order);
+
+            var notificationMessage = $"Order updated: OrderId: {order.Id}, CustomerId: {order.CustomerId}";
+            _rabbitMqService.SendMessage(notificationMessage);
         }
 
         public async Task<Product> GetProductByIdAsync(int productId)
         {
             return await _productRepository.GetByIdAsync(productId);
         }
-
     }
 }

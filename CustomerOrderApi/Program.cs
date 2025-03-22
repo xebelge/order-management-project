@@ -3,13 +3,13 @@ using CustomerOrders.Application.Services;
 using CustomerOrders.Infrastructure.Data;
 using CustomerOrders.Infrastructure.Repositories;
 using CustomerOrders.Infrastructure.Seed;
-using FluentValidation;
-using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StackExchange.Redis;
+using CustomerOrders.Application.Services.RabbitMQ;
+using CustomerOrders.Application.Services.ConsumerService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,12 +53,20 @@ builder.Services.AddScoped<CustomerOrderService>();
 builder.Services.AddScoped<IUserService, UserService>();
 
 // Add Redis Cache Service
-builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(builder.Configuration.GetValue<string>("Redis:ConnectionString")));
 builder.Services.AddScoped<RedisCacheService>();
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect(builder.Configuration.GetValue<string>("Redis:ConnectionString"))
+);
 
-// Add FluentValidation support.
-builder.Services.AddFluentValidationAutoValidation();
-builder.Services.AddValidatorsFromAssemblyContaining<CustomerOrders.Application.Validators.RegisterRequestValidator>();
+// Add RabbitMQ Service
+builder.Services.AddSingleton<RabbitMqService>();
+
+// Add RabbitMQ Consumer Service
+builder.Services.AddSingleton<ConsumerService>(sp =>
+{
+    var rabbitMqService = sp.GetRequiredService<RabbitMqService>();
+    return new ConsumerService(rabbitMqService);
+});
 
 // Configure Swagger with JWT support.
 builder.Services.AddSwaggerGen(c =>
@@ -90,6 +98,10 @@ builder.Services.AddEndpointsApiExplorer();
 
 // Build the web application.
 var app = builder.Build();
+
+// Create and start the ConsumerService to listen to RabbitMQ messages.
+var consumerService = app.Services.GetRequiredService<ConsumerService>();
+consumerService.StartConsuming();
 
 // Enable Swagger UI.
 app.UseSwagger();
