@@ -34,9 +34,8 @@ namespace CustomerOrderApi.Controllers
         public async Task<IActionResult> GetProducts()
         {
             var products = await _productService.GetAllProductsAsync();
-            return Ok(products);
+            return Ok(new ApiResponseDto<IEnumerable<ProductDto>>(200, true, "Products successfully retrieved.", products));
         }
-
 
         /// <summary>
         /// Retrieves a product by its unique ID.
@@ -49,12 +48,16 @@ namespace CustomerOrderApi.Controllers
             var validationError = ValidationHelper.ValidateProductId(id);
             if (!string.IsNullOrEmpty(validationError))
             {
-                return BadRequest(validationError);
+                return BadRequest(new ApiResponseDto<string>(400, false, validationError));
             }
 
             var product = await _productService.GetProductByIdAsync(id);
-            if (product == null) return NotFound();
-            return Ok(product);
+            if (product == null)
+            {
+                return NotFound(new ApiResponseDto<string>(404, false, "Product not found"));
+            }
+
+            return Ok(new ApiResponseDto<ProductDto>(200, true, "Product successfully retrieved.", product));
         }
 
         /// <summary>

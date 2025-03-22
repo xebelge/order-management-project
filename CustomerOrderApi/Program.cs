@@ -9,8 +9,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using StackExchange.Redis;
 
-// Create the builder for the web application.
 var builder = WebApplication.CreateBuilder(args);
 
 // Retrieve secrets from User Secrets (DB connection and JWT settings)
@@ -51,6 +51,10 @@ builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<CustomerOrderService>();
 builder.Services.AddScoped<IUserService, UserService>();
+
+// Add Redis Cache Service
+builder.Services.AddSingleton<IConnectionMultiplexer>(ConnectionMultiplexer.Connect(builder.Configuration.GetValue<string>("Redis:ConnectionString")));
+builder.Services.AddScoped<RedisCacheService>();
 
 // Add FluentValidation support.
 builder.Services.AddFluentValidationAutoValidation();
@@ -96,7 +100,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
 
 // Seed the database on startup.
 using (var scope = app.Services.CreateScope())
