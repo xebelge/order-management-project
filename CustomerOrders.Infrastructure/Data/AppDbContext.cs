@@ -11,6 +11,7 @@ namespace CustomerOrders.Infrastructure.Data
         public DbSet<Product> Products { get; set; }
         public DbSet<CustomerOrder> CustomerOrders { get; set; }
         public DbSet<CustomerOrderProduct> CustomerOrderProducts { get; set; }
+        public DbSet<RequestLog> RequestLogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
