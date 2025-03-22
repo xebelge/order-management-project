@@ -1,4 +1,7 @@
-﻿public class ProductDto
+﻿/// <summary>
+/// Represents the primary details of a product, including barcode and pricing.
+/// </summary>
+public class ProductDto
 {
     public int Id { get; set; }
     public string Barcode { get; set; } = null!;

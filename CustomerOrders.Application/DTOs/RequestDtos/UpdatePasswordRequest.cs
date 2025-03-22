@@ -1,4 +1,7 @@
-﻿namespace CustomerOrders.Application.DTOs.RequestDtos
+﻿/// <summary>
+/// Encapsulates the current and new password for a user seeking to change passwords.
+/// </summary>
+namespace CustomerOrders.Application.DTOs.RequestDtos
 {
     public class UpdatePasswordRequest
     {

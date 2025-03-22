@@ -1,4 +1,7 @@
-﻿public class CustomerOrderDto
+﻿/// <summary>
+/// Represents a customer's order, including total cost and product details.
+/// </summary>
+public class CustomerOrderDto
 {
     public int Id { get; set; }
     public int CustomerId { get; set; }

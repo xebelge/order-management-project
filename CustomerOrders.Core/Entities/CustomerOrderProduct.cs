@@ -1,5 +1,8 @@
 ﻿using CustomerOrders.Core.Entities;
 
+///
+/// Represents the link between a customer order and a product including quantity details.
+///
 public class CustomerOrderProduct: BaseEntity
 {
     public int Id { get; set; }

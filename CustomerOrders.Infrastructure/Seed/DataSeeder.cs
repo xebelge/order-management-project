@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.Identity;
 
 namespace CustomerOrders.Infrastructure.Seed
 {
+    /// <summary>
+    /// Populates the database with initial customers, products, and orders if none exist.
+    /// </summary>
     public static class DataSeeder
     {
         public static async Task SeedAsync(AppDbContext context)

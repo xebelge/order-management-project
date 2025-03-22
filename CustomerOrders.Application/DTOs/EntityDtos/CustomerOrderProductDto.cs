@@ -1,4 +1,7 @@
-﻿public class CustomerOrderProductDto
+﻿/// <summary>
+/// Represents a product within a customer's order, including quantity and pricing.
+/// </summary>
+public class CustomerOrderProductDto
 {
     public int ProductId { get; set; }
     public int ProductQuantity { get; set; }
