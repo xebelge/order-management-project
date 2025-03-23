@@ -54,11 +54,6 @@ namespace CustomerOrders.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate)
-        {
-            return await _dbSet.AnyAsync(predicate);
-        }
-
         public IQueryable<T> Query()
         {
             return _dbSet.AsQueryable();

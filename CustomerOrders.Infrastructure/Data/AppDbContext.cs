@@ -27,9 +27,15 @@ namespace CustomerOrders.Infrastructure.Data
                 .HasKey(cop => cop.Id);
 
             modelBuilder.Entity<CustomerOrderProduct>()
-                .HasOne(co => co.Product)
+                .HasOne(cop => cop.Product)
                 .WithMany(p => p.CustomerOrderProducts)
-                .HasForeignKey(co => co.ProductId);
+                .HasForeignKey(cop => cop.ProductId);
+
+            modelBuilder.Entity<CustomerOrderProduct>()
+                .HasOne<CustomerOrder>() 
+                .WithMany(o => o.CustomerOrderProducts)
+                .HasForeignKey(cop => cop.CustomerOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Customer>()
                 .HasIndex(c => c.Username)

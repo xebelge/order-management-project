@@ -33,7 +33,7 @@ namespace CustomerOrders.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("CustomerOrderId")
+                    b.Property<int>("CustomerOrderId")
                         .HasColumnType("integer");
 
                     b.Property<int>("ProductId")
@@ -205,7 +205,9 @@ namespace CustomerOrders.Infrastructure.Migrations
                 {
                     b.HasOne("CustomerOrders.Core.Entities.CustomerOrder", null)
                         .WithMany("CustomerOrderProducts")
-                        .HasForeignKey("CustomerOrderId");
+                        .HasForeignKey("CustomerOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("CustomerOrders.Core.Entities.Product", "Product")
                         .WithMany("CustomerOrderProducts")
