@@ -23,7 +23,7 @@ namespace CustomerOrders.Application.Services.ConsumerService
 
         public void StartConsuming()
         {
-            _logger.LogInformation("RabbitMQ consumer started. Queue: order_notifications");
+            _logger.LogInformation("RabbitMQ consumer started. Queue: customer_order_notifications");
 
             var consumer = new EventingBasicConsumer(_rabbitMqService.Channel);
             consumer.Received += (model, ea) =>
@@ -44,7 +44,7 @@ namespace CustomerOrders.Application.Services.ConsumerService
             };
 
             _rabbitMqService.Channel.BasicConsume(
-                queue: "order_notifications",
+                queue: "customer_order_notifications",
                 autoAck: true,
                 consumer: consumer);
         }
