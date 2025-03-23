@@ -1,5 +1,7 @@
 ﻿using CustomerOrders.Core.Entities;
-
+/// <summary>
+/// Defines the operations for managing products in the system.
+/// </summary>
 namespace CustomerOrders.Application.Interfaces
 {
     public interface IProductService

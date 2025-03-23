@@ -1,4 +1,7 @@
-﻿public class CustomerDto
+﻿/// <summary>
+/// Represents a customer with basic profile and deletion status info.
+/// </summary>
+public class CustomerDto
 {
     public int Id { get; set; }
     public string Username { get; set; } = string.Empty;

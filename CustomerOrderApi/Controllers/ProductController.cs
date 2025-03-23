@@ -1,14 +1,18 @@
-﻿using CustomerOrders.Application.DTOs;
-using CustomerOrders.Application.Helpers;
+﻿using CustomerOrderApi.Helpers;
+using CustomerOrders.Application.DTOs;
+using CustomerOrders.Application.Features.Products.Command;
+using CustomerOrders.Application.Features.Products.Commands;
+using CustomerOrders.Application.Features.Products.Queries;
 using CustomerOrders.Application.Services;
-using CustomerOrders.Core.Entities;
+using FluentValidation;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CustomerOrderApi.Controllers
 {
     /// <summary>
-    /// Provides operations for managing products.
+    /// Retrieves a list of all products.
     /// </summary>
     [Authorize]
     [ApiController]
@@ -16,108 +20,112 @@ namespace CustomerOrderApi.Controllers
     public class ProductController : ControllerBase
     {
         private readonly ProductService _productService;
+        private readonly IValidator<CreateProductRequest> _createProductValidator;
+        private readonly IValidator<UpdateProductRequest> _updateProductValidator;
+        private readonly IValidator<int> _productIdValidator;
+        private readonly IMediator _mediator;
+        private readonly ILogger<ProductController> _logger;
 
-        /// <summary>
-        /// Initializes a new instance of the ProductController class.
-        /// </summary>
-        /// <param name="productService">The service that provides product-related operations.</param>
-        public ProductController(ProductService productService)
+        public ProductController(
+            ProductService productService,
+            IValidator<CreateProductRequest> createProductValidator,
+            IValidator<UpdateProductRequest> updateProductValidator,
+            IValidator<int> productIdValidator,
+            IMediator mediator,
+            ILogger<ProductController> logger)
         {
             _productService = productService;
+            _createProductValidator = createProductValidator;
+            _updateProductValidator = updateProductValidator;
+            _productIdValidator = productIdValidator;
+            _mediator = mediator;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Retrieves all products.
+        /// Retrieves a list of all products.
         /// </summary>
-        /// <returns>A list of all products.</returns>
         [HttpGet]
         public async Task<IActionResult> GetProducts()
         {
-            var products = await _productService.GetAllProductsAsync();
-            return Ok(products);
+            var products = await _mediator.Send(new GetAllProductsQuery());
+            return Ok(new ApiResponseDto<IEnumerable<ProductDto>>(200, true, "Products successfully retrieved.", products));
         }
 
-
         /// <summary>
-        /// Retrieves a product by its unique ID.
+        /// Retrieves a single product by ID.
         /// </summary>
-        /// <param name="id">The unique ID of the product.</param>
-        /// <returns>The product with the specified ID, or a NotFound result if it doesn't exist.</returns>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetProductById(int id)
         {
-            var validationError = ValidationHelper.ValidateProductId(id);
-            if (!string.IsNullOrEmpty(validationError))
-            {
-                return BadRequest(validationError);
-            }
+            var validation = await ValidationHelper.ValidateId(id, _productIdValidator);
+            if (validation != null)
+                return validation;
 
-            var product = await _productService.GetProductByIdAsync(id);
-            if (product == null) return NotFound();
-            return Ok(product);
+            var product = await _mediator.Send(new GetProductByIdQuery { Id = id });
+            if (product == null)
+                return NotFound(new ApiResponseDto<string>(404, false, "Product not found"));
+
+            return Ok(new ApiResponseDto<ProductDto>(200, true, "Product successfully retrieved.", product));
         }
 
         /// <summary>
-        /// Adds a new product to the inventory.
+        /// Adds one or more new products to the system.
         /// </summary>
-        /// <param name="products">The products to add.</param>
-        /// <returns>The created product.</returns>
         [HttpPost]
-        public async Task<IActionResult> AddProducts([FromBody] List<Product> products)
+        public async Task<IActionResult> AddProducts([FromBody] List<CreateProductRequest> requestList)
         {
-            foreach (var product in products)
+            foreach (var request in requestList)
             {
-                var validationError = ValidationHelper.ValidateProduct(product);
-                if (!string.IsNullOrEmpty(validationError))
-                {
-                    return BadRequest(new ApiResponseDto<string>(400, false, validationError));
-                }
-
-                product.CreatedAt = DateTime.UtcNow;
-                await _productService.AddProductAsync(product);
+                var validation = await ValidationHelper.ValidateRequest(_createProductValidator, request);
+                if (validation != null)
+                    return validation;
             }
 
+            var result = await _mediator.Send(new AddProductsCommand { Products = requestList });
+            if (!result)
+                return BadRequest(new ApiResponseDto<string>(400, false, "Validation failed for one or more products."));
+
+            _logger.LogInformation("Products added successfully.");
             return Ok(new ApiResponseDto<string>(200, true, "Products successfully added."));
         }
 
         /// <summary>
-        /// Updates an existing product.
+        /// Updates one or more existing products.
         /// </summary>
-        /// <param name="products">The updated product data.</param>
-        /// <returns>No content if successful; BadRequest if the validation fails.</returns>
         [HttpPut]
-        public async Task<IActionResult> UpdateProducts([FromBody] List<Product> products)
+        public async Task<IActionResult> UpdateProducts([FromBody] List<UpdateProductRequest> requestList)
         {
-            foreach (var product in products)
+            foreach (var request in requestList)
             {
-                var validationError = ValidationHelper.ValidateProduct(product);
-                if (!string.IsNullOrEmpty(validationError))
-                {
-                    return BadRequest(new ApiResponseDto<string>(400, false, validationError));
-                }
-
-                product.UpdatedAt = DateTime.UtcNow;
-                await _productService.UpdateProductAsync(product);
+                var validation = await ValidationHelper.ValidateRequest(_updateProductValidator, request);
+                if (validation != null)
+                    return validation;
             }
 
+            var result = await _mediator.Send(new UpdateProductsCommand { Products = requestList });
+            if (!result)
+                return BadRequest(new ApiResponseDto<string>(400, false, "Product update failed. Please check inputs."));
+
+            _logger.LogInformation("Products updated successfully.");
             return Ok(new ApiResponseDto<string>(200, true, "Products successfully updated."));
         }
 
         /// <summary>
-        /// Deletes a product by its unique ID.
+        /// Deletes a product by ID.
         /// </summary>
-        /// <param name="id">The ID of the product to delete.</param>
-        /// <returns>No content if successful.</returns>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
-            var validationError = ValidationHelper.ValidateProductId(id);
-            if (!string.IsNullOrEmpty(validationError))
-            {
-                return BadRequest(new ApiResponseDto<string>(400, false, validationError));
-            }
+            var validation = await ValidationHelper.ValidateId(id, _productIdValidator);
+            if (validation != null)
+                return validation;
 
-            await _productService.DeleteProductAsync(id);
+            var result = await _mediator.Send(new DeleteProductCommand { Id = id });
+            if (!result)
+                return NotFound(new ApiResponseDto<string>(404, false, $"Product with ID {id} not found."));
+
+            _logger.LogInformation("Product with ID {ProductId} deleted.", id);
             return NoContent();
         }
     }

@@ -1,7 +1,6 @@
-﻿using CustomerOrders.Application.DTOs.EntityDtos;
+﻿using CustomerOrders.Application.DTOs.RequestDtos;
 using FluentValidation;
-
-namespace CustomerOrders.Application.Validators
+namespace CustomerOrders.Application.Helpers.Validators.AuthValidators
 {
     public class LoginRequestValidator : AbstractValidator<LoginRequest>
     {

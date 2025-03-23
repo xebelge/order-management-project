@@ -1,0 +1,28 @@
+2025-03-23 09:43:16 | [ADD] Product added: deneme (ID: 28, Price: 11)
+2025-03-23 09:45:36 | [UPDATE] Product updated: dsf (ID: 2, Price: 10)
+2025-03-23 10:02:00 | Order added: CustomerId: 17, OrderId: 14
+2025-03-23 10:03:31 | Order updated: OrderId: 1, CustomerId: 1
+2025-03-23 10:03:36 | Order updated: OrderId: 1, CustomerId: 1
+2025-03-23 10:03:45 | Order updated: OrderId: 2, CustomerId: 4
+2025-03-23 10:03:54 | Order updated: OrderId: 1, CustomerId: 1
+2025-03-23 10:04:10 | [ADD] Product added: sdfsdf (ID: 29, Price: 10)
+2025-03-23 10:07:26 | [DELETE] Product deleted: dsf (ID: 2)
+2025-03-23 10:24:50 | [UPDATE] Customer updated: eda b (ID: 17, Email: eda@hotmail.com)
+2025-03-23 10:41:46 | [UPDATE] Customer updated: eda (ID: 17, Email: eda@hotmail.com)
+2025-03-23 11:14:03 | [UPDATE] Customer updated: eda (ID: 17, Email: eda@hotmail.com)
+2025-03-23 13:02:36 | [UPDATE] Customer updated: dsada (ID: 17, Email: eda@hotmail.com)
+2025-03-23 13:18:02 | [ADD] Product added: testtttttttttttttt (ID: 30, Price: 3)
+2025-03-23 13:18:48 | [DELETE] Product deleted: sdfsdf (ID: 29)
+2025-03-23 14:44:00 | [UPDATE] Customer updated: eda (ID: 5, Email: test@test.com)
+2025-03-23 14:46:56 | [ADD] Product added: asd (ID: 8, Price: 10)
+2025-03-23 14:47:15 | [DELETE] Product deleted: asd (ID: 8)
+2025-03-23 18:30:18 | [ADD] Product added: test (ID: 9, Price: 10)
+2025-03-23 20:09:00 | [ADD] Product added: asdas (ID: 10, Price: 10)
+2025-03-23 20:20:44 | [ADD] Product added: rrf (ID: 11, Price: 10)
+2025-03-23 20:21:37 | [ADD] Product added: TEST (ID: 12, Price: 2)
+2025-03-23 20:24:14 | 🐇 Test mesajı - 23.03.2025 20:24:14
+2025-03-23 20:26:53 | 🐇 Test mesajı - 23.03.2025 20:26:17
+2025-03-23 20:33:30 | 🐇 Test mesajı - 23.03.2025 20:33:30
+2025-03-23 20:33:48 | 🐇 Test mesajı - 23.03.2025 20:33:48
+2025-03-23 20:33:52 | 🐇 Test mesajı - 23.03.2025 20:33:52
+2025-03-23 20:35:50 | 🐇 Test mesajı - 23.03.2025 20:35:50

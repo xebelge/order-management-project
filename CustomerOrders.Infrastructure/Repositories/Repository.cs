@@ -1,8 +1,8 @@
-﻿using CustomerOrders.Application.Interfaces;
+﻿using System.Linq.Expressions;
+using CustomerOrders.Core.Interfaces;
 using CustomerOrders.Core.Entities;
 using CustomerOrders.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
 
 namespace CustomerOrders.Infrastructure.Repositories
 {
@@ -19,6 +19,10 @@ namespace CustomerOrders.Infrastructure.Repositories
 
         public async Task<IEnumerable<T>> GetAllAsync()
         {
+            if (typeof(T).GetProperty("IsDeleted") != null)
+            {
+                return await _dbSet.Where(e => EF.Property<bool>(e, "IsDeleted") == false).ToListAsync();
+            }
             return await _dbSet.ToListAsync();
         }
 
@@ -50,14 +54,10 @@ namespace CustomerOrders.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-        public async Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate)
-        {
-            return await _dbSet.AnyAsync(predicate);
-        }
-
         public IQueryable<T> Query()
         {
             return _dbSet.AsQueryable();
         }
+
     }
 }

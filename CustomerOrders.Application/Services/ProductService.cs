@@ -1,59 +1,159 @@
-﻿using CustomerOrders.Application.Interfaces;
+﻿using AutoMapper;
+using CustomerOrders.Application.Interfaces;
+using CustomerOrders.Application.Services.RabbitMQ;
 using CustomerOrders.Core.Entities;
+using CustomerOrders.Core.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace CustomerOrders.Application.Services
 {
+    /// <summary>
+    /// Handles product-related operations, including caching and RabbitMQ notifications.
+    /// </summary>
     public class ProductService : IProductService
     {
         private readonly IRepository<Product> _repository;
+        private readonly RedisCacheService _redisCacheService;
+        private readonly ILogger<ProductService> _logger;
+        private readonly RabbitMqService _rabbitMqService;
+        private readonly IMapper _mapper;
 
-        public ProductService(IRepository<Product> repository)
+        public ProductService(
+            IRepository<Product> repository,
+            RedisCacheService redisCacheService,
+            ILogger<ProductService> logger,
+            RabbitMqService rabbitMqService,
+            IMapper mapper)
         {
             _repository = repository;
+            _redisCacheService = redisCacheService;
+            _logger = logger;
+            _rabbitMqService = rabbitMqService;
+            _mapper = mapper;
         }
 
+        /// <summary>
+        /// Retrieves all products, checking Redis cache first. Caches DB data if no cache found.
+        /// </summary>
         public async Task<IEnumerable<ProductDto>> GetAllProductsAsync()
         {
-            var products = await _repository.Query()
-                .ToListAsync();
-
-            return products.Select(product => new ProductDto
+            try
             {
-                Id = product.Id,
-                Barcode = product.Barcode,
-                Description = product.Description,
-                Quantity = product.Quantity,
-                Price = product.Price,
-            });
+                var cachedProducts = await _redisCacheService.GetProductListFromCacheAsync();
+                if (cachedProducts != null)
+                {
+                    _logger.LogInformation("Products retrieved from Redis cache.");
+                    return cachedProducts.Select(p => _mapper.Map<ProductDto>(p));
+                }
+
+                var products = await _repository.Query().ToListAsync();
+                await _redisCacheService.CacheProductListAsync(products);
+                _logger.LogInformation("Products retrieved from DB and cached.");
+
+                return products.Select(p => _mapper.Map<ProductDto>(p));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting the product list.");
+                return Enumerable.Empty<ProductDto>();
+            }
         }
 
+        /// <summary>
+        /// Gets details of a single product by its unique ID.
+        /// </summary>
         public async Task<ProductDto?> GetProductByIdAsync(int id)
         {
-            var product = await _repository.Query()
-                .FirstOrDefaultAsync(p => p.Id == id);
-
-            if (product == null) return null;
-
-            return new ProductDto
+            try
             {
-                Id = product.Id,
-                Barcode = product.Barcode,
-                Description = product.Description,
-                Quantity = product.Quantity,
-                Price = product.Price,
-            };
+                var product = await _repository.Query().FirstOrDefaultAsync(p => p.Id == id);
+                if (product == null)
+                {
+                    _logger.LogWarning("Product with ID {ProductId} not found.", id);
+                    return null;
+                }
+
+                return _mapper.Map<ProductDto>(product);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting product with ID {ProductId}", id);
+                return null;
+            }
         }
 
-        public async Task AddProductAsync(Product product) => await _repository.AddAsync(product);
+        /// <summary>
+        /// Adds a new product to the database, updates Redis cache, and notifies RabbitMQ.
+        /// </summary>
+        /// <param name="product">The product entity to add.</param>
+        public async Task AddProductAsync(Product product)
+        {
+            try
+            {
+                await _repository.AddAsync(product);
+                var products = await _repository.Query().ToListAsync();
+                await _redisCacheService.CacheProductListAsync(products);
 
-        public async Task UpdateProductAsync(Product product) => await _repository.UpdateAsync(product);
+                var message = $"[ADD] Product added: {product.Description} (ID: {product.Id}, Price: {product.Price})";
+                _rabbitMqService.SendMessage(message);
+                _logger.LogInformation(message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while adding a new product.");
+            }
+        }
 
+        /// <summary>
+        /// Updates an existing product, refreshes Redis cache, and notifies RabbitMQ.
+        /// </summary>
+        /// <param name="product">The product entity with new data.</param>
+        public async Task UpdateProductAsync(Product product)
+        {
+            try
+            {
+                await _repository.UpdateAsync(product);
+                var products = await _repository.Query().ToListAsync();
+                await _redisCacheService.CacheProductListAsync(products);
+
+                var message = $"[UPDATE] Product updated: {product.Description} (ID: {product.Id}, Price: {product.Price})";
+                _rabbitMqService.SendMessage(message);
+                _logger.LogInformation(message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while updating product with ID {ProductId}", product.Id);
+            }
+        }
+
+        /// <summary>
+        /// Removes a product by ID, updates Redis cache, and sends a RabbitMQ notification.
+        /// </summary>
+        /// <param name="id">The product ID to delete.</param>
         public async Task DeleteProductAsync(int id)
         {
-            var product = await _repository.GetByIdAsync(id);
-            if (product is not null)
+            try
+            {
+                var product = await _repository.GetByIdAsync(id);
+                if (product == null)
+                {
+                    _logger.LogWarning("Delete failed. Product with ID {ProductId} not found.", id);
+                    return;
+                }
+
                 await _repository.DeleteAsync(product);
+                var products = await _repository.Query().ToListAsync();
+                await _redisCacheService.CacheProductListAsync(products);
+
+                var message = $"[DELETE] Product deleted: {product.Description} (ID: {product.Id})";
+                _rabbitMqService.SendMessage(message);
+                _logger.LogInformation(message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while deleting product with ID {ProductId}", id);
+            }
         }
     }
 }

@@ -1,4 +1,9 @@
-﻿public class UpdateOrderProductQuantityRequest
+﻿namespace CustomerOrders.Application.DTOs.RequestDtos
 {
-    public int Quantity { get; set; }
+    public class UpdateOrderProductQuantityRequest
+    {
+        public int OrderId { get; set; }
+        public int ProductId { get; set; }
+        public int Quantity { get; set; }
+    }
 }

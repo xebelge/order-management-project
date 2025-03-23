@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 
-namespace CustomerOrders.Application.Interfaces
+namespace CustomerOrders.Core.Interfaces
 {
     public interface IRepository<T> where T : class
     {
@@ -9,7 +9,6 @@ namespace CustomerOrders.Application.Interfaces
         Task AddAsync(T entity);
         Task UpdateAsync(T entity);
         Task DeleteAsync(T entity);
-        Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate);
         IQueryable<T> Query();
     }
 }

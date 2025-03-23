@@ -1,4 +1,9 @@
-﻿namespace CustomerOrders.Application.DTOs
+﻿/// <summary>
+/// Standardized API response wrapper containing status, message, and optional payload.
+/// </summary>
+/// <typeparam name="T">Type of the data payload.</typeparam>
+
+namespace CustomerOrders.Application.DTOs
 {
     public class ApiResponseDto<T>
     {
