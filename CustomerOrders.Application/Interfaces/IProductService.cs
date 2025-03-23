@@ -1,10 +1,9 @@
 ﻿using CustomerOrders.Core.Entities;
-
+/// <summary>
+/// Defines the operations for managing products in the system.
+/// </summary>
 namespace CustomerOrders.Application.Interfaces
 {
-    /// <summary>
-    /// Defines the operations for managing products in the system.
-    /// </summary>
     public interface IProductService
     {
         Task<IEnumerable<ProductDto>> GetAllProductsAsync();

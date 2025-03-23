@@ -1,5 +1,5 @@
 ﻿/// <summary>
-/// Encapsulates the current and new password for a user seeking to change passwords.
+/// Encapsulates the current and new password for a customer seeking to change passwords.
 /// </summary>
 namespace CustomerOrders.Application.DTOs.RequestDtos
 {

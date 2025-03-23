@@ -1,5 +1,6 @@
-﻿using CustomerOrders.Application.Helpers.Validators.Primitives;
-using CustomerOrders.Application.Helpers.Validators.Requests;
+﻿using System.Reflection;
+using CustomerOrders.Application.Helpers.Validators.AuthValidators;
+using CustomerOrders.Application.Helpers.Validators.ProductValidators;
 using CustomerOrders.Application.Interfaces;
 using CustomerOrders.Application.Middleware;
 using CustomerOrders.Application.Services;
@@ -11,7 +12,10 @@ using CustomerOrders.Infrastructure.Repositories;
 using CustomerOrders.Infrastructure.Seed;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using HealthChecks.UI.Client;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -21,35 +25,23 @@ using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Serilog structuring
+// Serilog Configuration
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
-    .WriteTo.File(
-        path: "Logs/info-.log",
-        restrictedToMinimumLevel: LogEventLevel.Information,
-        rollingInterval: RollingInterval.Day,
-        fileSizeLimitBytes: 5_000_000,
-        rollOnFileSizeLimit: true,
-        retainedFileCountLimit: 10
-    )
-    .WriteTo.File(
-        path: "Logs/error-.log",
-        restrictedToMinimumLevel: LogEventLevel.Error,
-        rollingInterval: RollingInterval.Day,
-        fileSizeLimitBytes: 5_000_000,
-        rollOnFileSizeLimit: true,
-        retainedFileCountLimit: 10
-    )
+    .WriteTo.File("Logs/info-.log", LogEventLevel.Information, rollingInterval: RollingInterval.Day,
+                  fileSizeLimitBytes: 5_000_000, rollOnFileSizeLimit: true, retainedFileCountLimit: 10)
+    .WriteTo.File("Logs/error-.log", LogEventLevel.Error, rollingInterval: RollingInterval.Day,
+                  fileSizeLimitBytes: 5_000_000, rollOnFileSizeLimit: true, retainedFileCountLimit: 10)
     .CreateLogger();
 
 builder.Host.UseSerilog();
 
-// Retrieve secrets
-var connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
+// Configuration values
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var jwtKey = Convert.FromBase64String(jwtSettings["Key"]!);
 
-// Configure PostgreSQL
+// PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -76,18 +68,36 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// Dependency Injections
+// CQRS - MediatR
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
+    cfg.RegisterServicesFromAssemblyContaining<CustomerOrders.Application.Queries.CustomerQueries.GetCustomerByIdQuery>();
+});
+
+// FluentValidation
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<UpdateProductRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<AddCustomerOrdersCommand>();
+
+// AutoMapper
+builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+// Dependency Injection
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<ProductService>();
-builder.Services.AddScoped<CustomerOrderService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<RedisCacheService>();
+builder.Services.AddScoped<TokenService>();
 
+// Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(
-    ConnectionMultiplexer.Connect(builder.Configuration.GetValue<string>("Redis:ConnectionString"))
+    ConnectionMultiplexer.Connect(builder.Configuration["Redis:ConnectionString"])
 );
 
+// RabbitMQ
 builder.Services.AddSingleton<RabbitMqService>();
 builder.Services.AddSingleton<ConsumerService>(sp =>
 {
@@ -96,24 +106,14 @@ builder.Services.AddSingleton<ConsumerService>(sp =>
     return new ConsumerService(rabbitMqService, logger);
 });
 
-// FluentValidation
-builder.Services.AddFluentValidationAutoValidation();
-
-builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<AddOrderProductItemRequestValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<ProductItemsValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<IdValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<QuantityValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<EmailValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<UsernameValidator>();
-builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
-
-// Swagger configuration
+// Swagger
 builder.Services.AddSwaggerGen(c =>
 {
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Customer Order API", Version = "v1" });
+
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "Enter JWT Bearer token. Example: Bearer {token}",
+        Description = "Enter JWT token as: Bearer {token}",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
@@ -132,16 +132,38 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// HealthChecks 
+builder.Services.AddHealthChecks()
+    .AddNpgSql(connectionString, name: "PostgreSQL")
+    .AddRedis(builder.Configuration["Redis:ConnectionString"], name: "Redis");
+
+builder.Services.AddHealthChecksUI(options =>
+{
+    options.SetEvaluationTimeInSeconds(20);
+    options.MaximumHistoryEntriesPerEndpoint(60);
+    options.SetApiMaxActiveRequests(1);
+    options.AddHealthCheckEndpoint("CustomerOrder API", "/health");
+}).AddInMemoryStorage();
+
+// Controllers
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 var app = builder.Build();
 
+// Seed DB
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.Migrate();
+    await DataSeeder.SeedAsync(dbContext);
+}
+
 // Start RabbitMQ Consumer
 var consumerService = app.Services.GetRequiredService<ConsumerService>();
 consumerService.StartConsuming();
 
-// Middleware pipeline
+// Middleware
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseHttpsRedirection();
@@ -150,13 +172,14 @@ app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 
-// Run DB seed
-using (var scope = app.Services.CreateScope())
+// Health Check Endpoints
+app.MapHealthChecks("/health", new HealthCheckOptions
 {
-    var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<AppDbContext>();
-    context.Database.Migrate();
-    await DataSeeder.SeedAsync(context);
-}
+    ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+});
+app.MapHealthChecksUI(options =>
+{
+    options.UIPath = "/health-ui";
+});
 
 app.Run();

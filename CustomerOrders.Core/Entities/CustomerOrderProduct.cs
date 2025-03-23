@@ -9,4 +9,5 @@ public class CustomerOrderProduct: BaseEntity
     public int ProductId { get; set; }
     public Product Product { get; set; }
     public int ProductQuantity { get; set; }
+    public int CustomerOrderId { get; set; }
 }

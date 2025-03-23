@@ -2,6 +2,7 @@
 using CustomerOrders.Core.Entities;
 using CustomerOrders.Infrastructure.Data;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace CustomerOrders.Application.Middleware
@@ -12,10 +13,12 @@ namespace CustomerOrders.Application.Middleware
     public class RequestLoggingMiddleware
     {
         private readonly RequestDelegate _next;
+        private readonly ILogger<RequestLoggingMiddleware> _logger;
 
-        public RequestLoggingMiddleware(RequestDelegate next)
+        public RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
         {
             _next = next;
+            _logger = logger;
         }
 
         public async Task Invoke(HttpContext context, AppDbContext dbContext)
@@ -40,7 +43,7 @@ namespace CustomerOrders.Application.Middleware
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RequestBody Error] {ex.Message}");
+                _logger.LogInformation($"[RequestBody Error] {ex.Message}");
             }
 
             await _next(context);
@@ -54,7 +57,7 @@ namespace CustomerOrders.Application.Middleware
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ResponseBody Error] {ex.Message}");
+                _logger.LogInformation($"[ResponseBody Error] {ex.Message}");
             }
 
             var log = new RequestLog
@@ -75,7 +78,7 @@ namespace CustomerOrders.Application.Middleware
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Logging DB Error] {ex.Message}");
+                _logger.LogInformation($"[Logging DB Error] {ex.Message}");
             }
 
             await responseBodyStream.CopyToAsync(originalResponseBodyStream);

@@ -3,7 +3,7 @@
 namespace CustomerOrders.Core.Entities
 {
     /// <summary>
-    /// Represents an user with personal info, address, and order history.
+    /// Represents an customer with personal info, address, and order history.
     /// </summary>
     public class Customer: BaseEntity
     {

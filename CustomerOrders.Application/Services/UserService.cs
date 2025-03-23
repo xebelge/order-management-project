@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace CustomerOrders.Application.Services
 {
     /// <summary>
-    /// Handles user registration, validation, and profile updates.
+    /// Handles customer registration, validation, and profile updates.
     /// </summary>
     public class UserService : IUserService
     {
@@ -23,7 +23,7 @@ namespace CustomerOrders.Application.Services
         }
 
         /// <summary>
-        /// Finds a user by username, ignoring case.
+        /// Finds a customer by username, ignoring case.
         /// </summary>
         /// <param name="username">The username to match.</param>
         /// <returns>A matching customer or null.</returns>
@@ -41,7 +41,7 @@ namespace CustomerOrders.Application.Services
         }
 
         /// <summary>
-        /// Finds a user by email, ignoring case.
+        /// Finds a customer by email, ignoring case.
         /// </summary>
         /// <param name="email">The email address to match.</param>
         /// <returns>A matching customer or null.</returns>
@@ -73,33 +73,7 @@ namespace CustomerOrders.Application.Services
         }
 
         /// <summary>
-        /// Checks if the provided username/password combo is valid.
-        /// </summary>
-        /// <param name="username">Username to validate.</param>
-        /// <param name="password">Plain-text password.</param>
-        /// <returns>True if valid, false otherwise.</returns>
-        public async Task<bool> ValidateUserAsync(string username, string password)
-        {
-            var customer = await GetUserByUsernameAsync(username);
-            if (customer == null)
-            {
-                _logger.LogWarning("Validation failed: user not found ({Username})", username);
-                return false;
-            }
-
-            var result = _passwordHasher.VerifyHashedPassword(customer, customer.PasswordHash, password);
-            var success = result == PasswordVerificationResult.Success;
-
-            if (success)
-                _logger.LogInformation("User validated successfully: {Username}", username);
-            else
-                _logger.LogWarning("Password validation failed for user: {Username}", username);
-
-            return success;
-        }
-
-        /// <summary>
-        /// Persists changes to an existing user's data.
+        /// Persists changes to an existing customer's data.
         /// </summary>
         /// <param name="customer">The modified customer entity.</param>
         public async Task UpdateUserAsync(Customer customer)
