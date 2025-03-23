@@ -1,276 +1,227 @@
-﻿using CustomerOrders.Application.DTOs;
-using CustomerOrders.Application.Services;
-using CustomerOrders.Core.Entities;
+﻿using CustomerOrderApi.Helpers; 
+using CustomerOrders.Application.CustomerOrders.Queries.CustomerOrderQueries;
+using CustomerOrders.Application.DTOs;
+using CustomerOrders.Application.DTOs.RequestDtos;
+using CustomerOrders.Application.Features.CustomerOrders.Commands;
 using FluentValidation;
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CustomerOrderApi.Controllers
 {
     /// <summary>
-    /// Manages operations related to customer orders and associated products.
+    /// Handles operations related to customer orders.
     /// </summary>
     [Authorize]
     [ApiController]
     [Route("api/customerorders")]
     public class CustomerOrderController : ControllerBase
     {
-        private readonly CustomerOrderService _customerOrderService;
-        private readonly ProductService _productService;
+        private readonly IMediator _mediator;
+        private readonly IValidator<CreateOrderRequest> _createOrderValidator;
+        private readonly IValidator<AddProductToOrderRequest> _addProductValidator;
+        private readonly IValidator<UpdateOrderAddressRequest> _updateAddressValidator;
+        private readonly IValidator<UpdateOrderProductQuantityRequest> _updateQuantityValidator;
         private readonly IValidator<int> _idValidator;
-        private readonly IValidator<AddOrderProductItemRequest> _orderItemValidator;
-        private readonly IValidator<List<AddOrderProductItemRequest>> _orderItemsValidator;
-        private readonly IValidator<int> _quantityValidator;
+        private readonly ILogger<CustomerOrderController> _logger;
 
         public CustomerOrderController(
-            CustomerOrderService customerOrderService,
-            ProductService productService,
+            IMediator mediator,
+            IValidator<CreateOrderRequest> createOrderValidator,
+            IValidator<AddProductToOrderRequest> addProductValidator,
+            IValidator<UpdateOrderAddressRequest> updateAddressValidator,
+            IValidator<UpdateOrderProductQuantityRequest> updateQuantityValidator,
             IValidator<int> idValidator,
-            IValidator<AddOrderProductItemRequest> orderItemValidator,
-            IValidator<List<AddOrderProductItemRequest>> orderItemsValidator,
-            IValidator<int> quantityValidator)
+            ILogger<CustomerOrderController> logger)
         {
-            _customerOrderService = customerOrderService;
-            _productService = productService;
+            _mediator = mediator;
+            _createOrderValidator = createOrderValidator;
+            _addProductValidator = addProductValidator;
+            _updateAddressValidator = updateAddressValidator;
+            _updateQuantityValidator = updateQuantityValidator;
             _idValidator = idValidator;
-            _orderItemValidator = orderItemValidator;
-            _orderItemsValidator = orderItemsValidator;
-            _quantityValidator = quantityValidator;
+            _logger = logger;
         }
 
         /// <summary>
-        /// Retrieves all existing orders along with their product details.
+        /// Returns a list of all customer orders.
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> GetOrders()
         {
-            var orders = await _customerOrderService.GetAllOrdersAsync();
-
-            var orderDtos = orders.Select(order => new CustomerOrderDto
-            {
-                Id = order.Id,
-                CustomerId = order.CustomerId,
-                Address = order.Address,
-                CreatedAt = order.CreatedAt,
-                UpdatedAt = order.UpdatedAt,
-                TotalAmount = order.TotalAmount,
-                Products = order.Products.Select(cop =>
-                {
-                    var product = _productService.GetProductByIdAsync(cop.ProductId).Result;
-                    return new CustomerOrderProductDto
-                    {
-                        ProductId = cop.ProductId,
-                        ProductQuantity = cop.ProductQuantity,
-                        Barcode = product?.Barcode,
-                        Description = product?.Description,
-                        Price = product?.Price ?? 0
-                    };
-                }).ToList()
-            }).ToList();
-
-            return Ok(new ApiResponseDto<IEnumerable<CustomerOrderDto>>(200, true, "Orders retrieved successfully", orderDtos));
+            _logger.LogInformation("Retrieving all customer orders.");
+            var result = await _mediator.Send(new GetAllCustomerOrdersQuery());
+            return Ok(new ApiResponseDto<IEnumerable<CustomerOrderDto>>(200, true, "Orders retrieved successfully", result));
         }
 
         /// <summary>
-        /// Retrieves a specific order by its ID.
+        /// Returns a specific customer order by ID.
         /// </summary>
-        /// <param name="id">Unique order ID.</param>
-        /// <returns>The order details or an error if not found.</returns>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetOrderById(int id)
         {
-            var result = _idValidator.Validate(id);
-            if (!result.IsValid)
-                return BadRequest(new ApiResponseDto<string>(400, false, result.Errors[0].ErrorMessage));
+            var validationResult = await ValidationHelper.ValidateId(id, _idValidator);
+            if (validationResult != null)
+                return validationResult;
 
-            var order = await _customerOrderService.GetOrderDtoById(id);
-            if (order == null)
+            var result = await _mediator.Send(new GetCustomerOrderByIdQuery(id));
+            if (result == null)
                 return NotFound(new ApiResponseDto<string>(404, false, "Order not found"));
 
-            return Ok(new ApiResponseDto<CustomerOrderDto>(200, true, "Order retrieved successfully", order));
+            return Ok(new ApiResponseDto<CustomerOrderDto>(200, true, "Order retrieved successfully", result));
         }
 
         /// <summary>
-        /// Creates new orders for one or more customers.
+        /// Creates one or more new customer orders.
         /// </summary>
-        /// <param name="requests">List of CreateOrderRequest data.</param>
-        /// <returns>Details of added orders or validation errors.</returns>
         [HttpPost]
         public async Task<IActionResult> AddOrders([FromBody] List<CreateOrderRequest> requests)
         {
             foreach (var request in requests)
             {
-                var idResult = _idValidator.Validate(request.CustomerId);
-                if (!idResult.IsValid)
-                    return BadRequest(new ApiResponseDto<string>(400, false, idResult.Errors[0].ErrorMessage));
-
-                var itemsResult = _orderItemsValidator.Validate(request.ProductItems);
-                if (!itemsResult.IsValid)
-                    return BadRequest(new ApiResponseDto<string>(400, false, itemsResult.Errors[0].ErrorMessage));
+                var validation = await ValidationHelper.ValidateRequest(_createOrderValidator, request);
+                if (validation != null)
+                    return validation;
             }
 
-            var orders = requests.Select(r => new CustomerOrder
-            {
-                CustomerId = r.CustomerId,
-                Address = r.Address,
-                CustomerOrderProducts = r.ProductItems.Select(item => new CustomerOrderProduct
-                {
-                    ProductId = item.ProductId,
-                    ProductQuantity = item.Quantity
-                }).ToList(),
-                CreatedAt = DateTime.UtcNow
-            }).ToList();
+            var result = await _mediator.Send(new AddCustomerOrdersCommand { Orders = requests });
 
-            foreach (var order in orders)
+            if (result == null)
             {
-                await _customerOrderService.AddOrderAsync(order);
+                _logger.LogError("AddCustomerOrdersCommand returned null.");
+                return StatusCode(500, new ApiResponseDto<string>(500, false, "Unexpected error occurred while creating orders."));
             }
 
-            var orderDtos = orders.Select(order => new CustomerOrderDto
-            {
-                Id = order.Id,
-                CustomerId = order.CustomerId,
-                Address = order.Address,
-                CreatedAt = order.CreatedAt,
-                Products = order.CustomerOrderProducts.Select(p => new CustomerOrderProductDto
-                {
-                    ProductId = p.ProductId,
-                    ProductQuantity = p.ProductQuantity,
-                }).ToList()
-            }).ToList();
+            if (!result.Success)
+                return BadRequest(new ApiResponseDto<string>(400, false, result.ErrorMessage ?? "Order creation failed."));
 
-            return CreatedAtAction(nameof(GetOrders), null, new ApiResponseDto<IEnumerable<CustomerOrderDto>>(201, true, "Orders added successfully", orderDtos));
+            return CreatedAtAction(nameof(GetOrders), null,
+                new ApiResponseDto<IEnumerable<CustomerOrderDto>>(201, true, "Orders added successfully", result.Orders));
         }
 
         /// <summary>
-        /// Removes an order by its ID.
+        /// Deletes a customer order by ID.
         /// </summary>
-        /// <param name="id">Order ID to remove.</param>
-        /// <returns>NoContent or a validation error.</returns>
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteOrder(int id)
         {
-            var result = _idValidator.Validate(id);
-            if (!result.IsValid)
-                return BadRequest(new ApiResponseDto<string>(400, false, result.Errors[0].ErrorMessage));
+            var validationResult = await ValidationHelper.ValidateId(id, _idValidator);
+            if (validationResult != null)
+                return validationResult;
 
-            await _customerOrderService.DeleteOrderAsync(id);
+            var success = await _mediator.Send(new DeleteCustomerOrderCommand { OrderId = id });
+            if (!success)
+                return NotFound(new ApiResponseDto<string>(404, false, "Order not found."));
+
+            _logger.LogInformation("Order deleted. ID: {Id}", id);
             return NoContent();
         }
 
         /// <summary>
-        /// Adds a product to an existing order.
+        /// Adds a product to a specific order.
         /// </summary>
-        /// <param name="orderId">The order to update.</param>
-        /// <param name="request">Details of the product being added.</param>
-        /// <returns>NoContent if successful, or error if invalid.</returns>
         [HttpPost("{orderId}/products")]
         public async Task<IActionResult> AddProductToOrder(int orderId, [FromBody] AddProductToOrderRequest request)
         {
-            if (!_idValidator.Validate(orderId).IsValid ||
-                !_idValidator.Validate(request.ProductId).IsValid ||
-                !_quantityValidator.Validate(request.Quantity).IsValid)
+            var idValidation = await ValidationHelper.ValidateId(orderId, _idValidator);
+            if (idValidation != null)
+                return idValidation;
+
+            var validation = await ValidationHelper.ValidateRequest(_addProductValidator, request);
+            if (validation != null)
+                return validation;
+
+            var success = await _mediator.Send(new AddProductToOrderCommand
             {
-                return BadRequest(new ApiResponseDto<string>(400, false, "Invalid input."));
-            }
-
-            var order = await _customerOrderService.GetOrderByIdAsync(orderId);
-            if (order == null)
-                return NotFound(new ApiResponseDto<string>(404, false, "Order not found"));
-
-            if (order.CustomerOrderProducts.Any(cop => cop.ProductId == request.ProductId))
-                return Conflict(new ApiResponseDto<string>(409, false, "Product already exists in this order"));
-
-            order.CustomerOrderProducts.Add(new CustomerOrderProduct
-            {
+                OrderId = orderId,
                 ProductId = request.ProductId,
-                ProductQuantity = request.Quantity
+                Quantity = request.Quantity
             });
 
-            await _customerOrderService.UpdateOrderAsync(order);
+            if (!success)
+                return Conflict(new ApiResponseDto<string>(409, false, "Product already exists in this order or order not found."));
+
             return NoContent();
         }
 
         /// <summary>
-        /// Removes a product from an existing order.
+        /// Removes a product from a specific order.
         /// </summary>
-        /// <param name="orderId">Order ID.</param>
-        /// <param name="productId">Product ID to remove.</param>
-        /// <returns>NoContent if successful, or error if invalid.</returns>
         [HttpDelete("{orderId}/products/{productId}")]
         public async Task<IActionResult> RemoveProductFromOrder(int orderId, int productId)
         {
-            if (!_idValidator.Validate(orderId).IsValid || !_idValidator.Validate(productId).IsValid)
-                return BadRequest(new ApiResponseDto<string>(400, false, "Invalid IDs"));
+            var idValidation = await ValidationHelper.ValidateId(orderId, _idValidator);
+            if (idValidation != null)
+                return idValidation;
 
-            var order = await _customerOrderService.GetOrderByIdAsync(orderId);
-            if (order == null)
-                return NotFound(new ApiResponseDto<string>(404, false, "Order not found"));
+            var productValidation = await ValidationHelper.ValidateId(productId, _idValidator);
+            if (productValidation != null)
+                return productValidation;
 
-            var productLink = order.CustomerOrderProducts.FirstOrDefault(cop => cop.ProductId == productId);
-            if (productLink == null)
-                return NotFound(new ApiResponseDto<string>(404, false, "Product not found in this order"));
+            var success = await _mediator.Send(new RemoveProductFromOrderCommand
+            {
+                OrderId = orderId,
+                ProductId = productId
+            });
 
-            order.CustomerOrderProducts.Remove(productLink);
-            await _customerOrderService.UpdateOrderAsync(order);
+            if (!success)
+                return NotFound(new ApiResponseDto<string>(404, false, "Order or product not found."));
+
             return NoContent();
         }
 
         /// <summary>
-        /// Updates the delivery address of a specific order.
+        /// Updates the delivery address of a customer order.
         /// </summary>
-        /// <param name="orderId">Order ID.</param>
-        /// <param name="request">New address data.</param>
-        /// <returns>NoContent on success, error if invalid.</returns>
         [HttpPut("{orderId}/address")]
         public async Task<IActionResult> UpdateOrderAddress(int orderId, [FromBody] UpdateOrderAddressRequest request)
         {
-            if (!_idValidator.Validate(orderId).IsValid)
-                return BadRequest(new ApiResponseDto<string>(400, false, "Invalid order ID"));
+            var idValidation = await ValidationHelper.ValidateId(orderId, _idValidator);
+            if (idValidation != null)
+                return idValidation;
 
-            var order = await _customerOrderService.GetOrderByIdAsync(orderId);
-            if (order == null)
+            var validation = await ValidationHelper.ValidateRequest(_updateAddressValidator, request);
+            if (validation != null)
+                return validation;
+
+            var success = await _mediator.Send(new UpdateOrderAddressCommand
+            {
+                OrderId = orderId,
+                Address = request.Address
+            });
+
+            if (!success)
                 return NotFound(new ApiResponseDto<string>(404, false, "Order not found"));
 
-            order.Address = request.Address;
-            await _customerOrderService.UpdateOrderAsync(order);
             return NoContent();
         }
 
         /// <summary>
-        /// Updates the quantity of a product within an existing order.
+        /// Updates the quantity of a product in a specific order.
         /// </summary>
-        /// <param name="orderId">Order ID.</param>
-        /// <param name="productId">Product ID to update.</param>
-        /// <param name="request">New quantity value.</param>
-        /// <returns>NoContent if updated, error if invalid or insufficient stock.</returns>
         [HttpPatch("{orderId}/products/{productId}/quantity")]
         public async Task<IActionResult> UpdateProductQuantityInOrder(int orderId, int productId, [FromBody] UpdateOrderProductQuantityRequest request)
         {
-            if (!_idValidator.Validate(orderId).IsValid ||
-                !_idValidator.Validate(productId).IsValid ||
-                !_quantityValidator.Validate(request.Quantity).IsValid)
+            var idValidation = await ValidationHelper.ValidateId(orderId, _idValidator);
+            if (idValidation != null)
+                return idValidation;
+
+            var productValidation = await ValidationHelper.ValidateId(productId, _idValidator);
+            if (productValidation != null)
+                return productValidation;
+
+            var validation = await ValidationHelper.ValidateRequest(_updateQuantityValidator, request);
+            if (validation != null)
+                return validation;
+
+            await _mediator.Send(new UpdateProductQuantityInOrderCommand
             {
-                return BadRequest(new ApiResponseDto<string>(400, false, "Invalid input"));
-            }
+                OrderId = orderId,
+                ProductId = productId,
+                Quantity = request.Quantity
+            });
 
-            var order = await _customerOrderService.GetOrderByIdAsync(orderId);
-            if (order == null)
-                return NotFound(new ApiResponseDto<string>(404, false, "Order not found"));
-
-            var productLink = order.CustomerOrderProducts.FirstOrDefault(cop => cop.ProductId == productId);
-            if (productLink == null)
-                return NotFound(new ApiResponseDto<string>(404, false, "Product not found in this order"));
-
-            var product = await _customerOrderService.GetProductByIdAsync(productId);
-            if (product == null)
-                return NotFound(new ApiResponseDto<string>(404, false, "Product not found"));
-
-            if (request.Quantity > product.Quantity)
-                return BadRequest(new ApiResponseDto<string>(400, false, $"Insufficient stock. Available: {product.Quantity}"));
-
-            productLink.ProductQuantity = request.Quantity;
-            await _customerOrderService.UpdateOrderAsync(order);
             return NoContent();
         }
     }

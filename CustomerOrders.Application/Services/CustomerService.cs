@@ -1,4 +1,4 @@
-﻿using CustomerOrders.Application.Helpers.Mappers;
+﻿using AutoMapper;
 using CustomerOrders.Application.Services.RabbitMQ;
 using CustomerOrders.Core.Entities;
 using CustomerOrders.Core.Interfaces;
@@ -15,87 +15,29 @@ namespace CustomerOrders.Application.Services
         private readonly IRepository<Customer> _repository;
         private readonly RabbitMqService _rabbitMqService;
         private readonly ILogger<CustomerService> _logger;
+        private readonly IMapper _mapper;
 
         public CustomerService(
             IRepository<Customer> repository,
             RabbitMqService rabbitMqService,
-            ILogger<CustomerService> logger)
+            ILogger<CustomerService> logger,
+            IMapper mapper)
         {
             _repository = repository;
             _rabbitMqService = rabbitMqService;
             _logger = logger;
+            _mapper = mapper;
         }
 
-        /// <summary>
-        /// Retrieves all customers, active or not.
         /// </summary>
-        public async Task<IEnumerable<CustomerDto>> GetAllCustomersAsync()
+        public async Task<CustomerDto?> GetUserByUsernameAsync(string username)
         {
             try
             {
-                var customers = await _repository.Query().ToListAsync();
-                _logger.LogInformation("Retrieved all customers. Count: {Count}", customers.Count);
-                return customers.Select(c => c.ToDto());
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while fetching all customers.");
-                return Enumerable.Empty<CustomerDto>();
-            }
-        }
+                var customer = await _repository.Query()
+                    .FirstOrDefaultAsync(c => c.Username == username && !c.IsDeleted);
 
-        /// <summary>
-        /// Fetches a single customer by ID.
-        /// </summary>
-        public async Task<CustomerDto?> GetCustomerByIdAsync(int id)
-        {
-            try
-            {
-                var customer = await _repository.Query().FirstOrDefaultAsync(c => c.Id == id);
-                if (customer == null)
-                {
-                    _logger.LogWarning("Customer not found. ID: {CustomerId}", id);
-                    return null;
-                }
-                return customer.ToDto();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while retrieving customer ID {CustomerId}", id);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Fetches a customer directly by email.
-        /// </summary>
-        public async Task<Customer?> GetCustomerByEmailAsync(string email)
-        {
-            try
-            {
-                return await _repository.Query().FirstOrDefaultAsync(c => c.Email == email);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while fetching customer by email: {Email}", email);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Finds a customer by username and returns a DTO.
-        /// </summary>
-        public async Task<CustomerDto> GetUserByUsernameAsync(string username)
-        {
-            try
-            {
-                var customer = await _repository.Query().FirstOrDefaultAsync(c => c.Username == username);
-                if (customer == null)
-                {
-                    _logger.LogWarning("Customer with username {Username} not found.", username);
-                    return null;
-                }
-                return customer.ToDto();
+                return customer == null ? null : _mapper.Map<CustomerDto>(customer);
             }
             catch (Exception ex)
             {
@@ -136,20 +78,34 @@ namespace CustomerOrders.Application.Services
         }
 
         /// <summary>
-        /// Marks a customer as deleted so it can no longer be used.
+        /// Delete and marks a customer as deleted so it can no longer be used.
         /// </summary>
         public async Task DeleteUserAsync(int customerId)
         {
             var customer = await _repository.GetByIdAsync(customerId);
-            if (customer != null)
+
+            if (customer == null)
             {
-                customer.IsDeleted = true;
-                await _repository.UpdateAsync(customer);
+                _logger.LogWarning("Delete failed. Customer ID {CustomerId} not found.", customerId);
+                return;
             }
+
+            if (customer.IsDeleted)
+            {
+                _logger.LogInformation("Customer ID {CustomerId} is already marked as deleted.", customerId);
+                return;
+            }
+
+            customer.IsDeleted = true;
+            await _repository.UpdateAsync(customer);
+
+            var message = $"[DELETE] Customer marked as deleted: {customer.Username} (ID: {customer.Id})";
+            _rabbitMqService.SendMessage(message);
+            _logger.LogInformation(message);
         }
 
         /// <summary>
-        /// Looks up a user by email among all customers in the repo.
+        /// Looks up a customer by email among all customers in the repo.
         /// </summary>
         public async Task<Customer?> GetUserByEmailAsync(string email)
         {

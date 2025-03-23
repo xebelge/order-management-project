@@ -1,4 +1,4 @@
-﻿using CustomerOrders.Application.Helpers.Mappers;
+﻿using AutoMapper;
 using CustomerOrders.Application.Interfaces;
 using CustomerOrders.Application.Services.RabbitMQ;
 using CustomerOrders.Core.Entities;
@@ -17,17 +17,20 @@ namespace CustomerOrders.Application.Services
         private readonly RedisCacheService _redisCacheService;
         private readonly ILogger<ProductService> _logger;
         private readonly RabbitMqService _rabbitMqService;
+        private readonly IMapper _mapper;
 
         public ProductService(
             IRepository<Product> repository,
             RedisCacheService redisCacheService,
             ILogger<ProductService> logger,
-            RabbitMqService rabbitMqService)
+            RabbitMqService rabbitMqService,
+            IMapper mapper)
         {
             _repository = repository;
             _redisCacheService = redisCacheService;
             _logger = logger;
             _rabbitMqService = rabbitMqService;
+            _mapper = mapper;
         }
 
         /// <summary>
@@ -41,14 +44,14 @@ namespace CustomerOrders.Application.Services
                 if (cachedProducts != null)
                 {
                     _logger.LogInformation("Products retrieved from Redis cache.");
-                    return cachedProducts.Select(p => p.ToDto());
+                    return cachedProducts.Select(p => _mapper.Map<ProductDto>(p));
                 }
 
                 var products = await _repository.Query().ToListAsync();
                 await _redisCacheService.CacheProductListAsync(products);
                 _logger.LogInformation("Products retrieved from DB and cached.");
 
-                return products.Select(p => p.ToDto());
+                return products.Select(p => _mapper.Map<ProductDto>(p));
             }
             catch (Exception ex)
             {
@@ -71,7 +74,7 @@ namespace CustomerOrders.Application.Services
                     return null;
                 }
 
-                return product.ToDto();
+                return _mapper.Map<ProductDto>(product);
             }
             catch (Exception ex)
             {
