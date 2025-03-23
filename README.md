@@ -85,7 +85,7 @@ This is a full-featured Customer Order Management API built with **.NET 8**, des
 
 For complete details including request/response formats, usage scenarios, architecture, and diagrams:
 
-**[Read Full Project Documentation](./Customer-Order-Management-Documentation.docx)**
+[Customer-Order-Management-Documentation.docx](https://github.com/user-attachments/files/19411228/Customer-Order-Management-Documentation.docx)
 
 ---
 
